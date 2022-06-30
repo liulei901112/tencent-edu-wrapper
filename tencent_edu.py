@@ -11,8 +11,8 @@ from pyexcel_xls import save_data
 
 
 class wrapper:
-    metadata_debug = False
-    cache_debug = False
+    metadata_debug = True
+    cache_debug = True
     auto_filter = True
     export_dir = '.'
     meta_export_filename = 'meta.xls'
@@ -51,7 +51,7 @@ class wrapper:
         # token in path(if exists)
         # path
         o_path = result.path
-        o_token_raw = re.findall(r'token\.([\S]+)\%', o_path)
+        o_token_raw = re.findall(r'token\.([\S]+)\.v', o_path)
         if len(o_token_raw):
             # tokens = parse.parse_qs(base64_url_decode(token_raw[0]))  # 二进制形式
             o_tokens = parse.parse_qs(self.__base64_url_decode(o_token_raw[0]).decode('utf-8', 'ignore'))  # 字符串形式
@@ -96,12 +96,15 @@ class wrapper:
             print('[-]\tmetadata does not exists in {}'.format(os.path.split(filename)[1]))
             return None
         ex = self.__extract_from_url(url=metadata)
-        result = [os.path.split(filename)[1], ex.tokens['uin'][0], ex.tokens['term_id'][0], ex.tokens['pskey'][0]]
+        uin = ex.tokens['uin'][0]
+        uin_array = uin.split(';')
+        term_id = uin_array[1].split('=')[1]
+        ps_key = uin_array[2].split('=')[1]
+        result = [os.path.split(filename)[1], uin, term_id, ps_key]
 
         if self.metadata_debug:
             print('[+]\tMetadata of {}:'.format(os.path.split(filename)[1]))
-            print('[+]\tuin:{}\tterm_id:{}\tpskey:{}'.format(ex.tokens['uin'][0], ex.tokens['term_id'][0],
-                                                           ex.tokens['pskey'][0]))
+            print('[+]\tuin:{}\tterm_id:{}\tpskey:{}'.format(uin, term_id, ps_key))
             print('[+]\targs:{}'.format(ex.queries))
             # print(result)
         return result
@@ -130,10 +133,11 @@ class wrapper:
             key = data[0]  # column:key
             value = data[1]  # column:value
             key_extracted = self.__extract_from_url(key)  # 判断行数据类型（M3U8（可选）、AES_KEY和TS_BLOB）
+            key_extracted_queries_keys = key_extracted.queries.keys() # AES-128密钥行
             if '#EXTM3U' in str(value):
                 pass
 
-            elif 'edk' in key_extracted.queries.keys():  # AES-128密钥行
+            elif 'edk' in key_extracted_queries_keys:  # AES-128密钥行
                 aes_keys.append(value)
                 key_in_hex = binascii.b2a_hex(value)
                 if self.cache_debug:

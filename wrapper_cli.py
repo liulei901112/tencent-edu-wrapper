@@ -6,17 +6,16 @@
 from tencent_edu import wrapper
 import argparse
 
-parser = argparse.ArgumentParser(
-    description='A AES-128 decrypter of Tencent-edu Android app, for offline-downloaded videos.')
+parser = argparse.ArgumentParser(description='A AES-128 decrypter of Tencent-edu Android app, for offline-downloaded videos.')
 parser.add_argument('-f', '--file', dest='file', help='run in file mode and set filename', default=None)
 parser.add_argument('-r', '--directory', dest='directory', help='run directory mode and set directory', default=None)
-parser.add_argument('-o', '--output', dest='export_dir', help='dir to export, default is current workspace',
-                    default='.')
-parser.add_argument('-m', '--meta', dest='meta_file_name', help='specify the filename of metadata file(.xls)',
-                    default=None)
-parser.add_argument('-l', '--filter', dest='auto_filter', help='set if you need auto_filter',
-                    default=False)
+parser.add_argument('-o', '--output', dest='export_dir', help='dir to export, default is current workspace', default='.')
+parser.add_argument('-m', '--meta', dest='meta_file_name', help='specify the filename of metadata file(.xls)', default=None)
+parser.add_argument('-l', '--filter', dest='auto_filter', help='set if you need auto_filter', default=False)
+
 args = parser.parse_args()
+
+# args.file = '02af9597d82cefb2c023c74d1360a253.m3u8.sqlite'
 
 if (args.file is None) ^ (args.directory is None):
     w = wrapper()
