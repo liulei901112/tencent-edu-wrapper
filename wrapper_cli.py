@@ -15,7 +15,10 @@ parser.add_argument('-l', '--filter', dest='auto_filter', help='set if you need 
 
 args = parser.parse_args()
 
-# args.file = '02af9597d82cefb2c023c74d1360a253.m3u8.sqlite'
+# args.file = '1b493302c0c14abd0e673d5f34dab285.m3u8.sqlite'
+
+#args.directory = 'D:\\TXEDU'
+#args.export_dir = 'D:\\TXEDU_TS'
 
 if (args.file is None) ^ (args.directory is None):
     w = wrapper()

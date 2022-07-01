@@ -4,7 +4,7 @@
 # @FileName: tencent_edu.py
 # @Software: PyCharm
 
-import sqlite3 as db, base64, re, os, time, binascii, argparse
+import sqlite3 as db, base64, re, os, time, binascii, argparse, tqdm
 from Crypto.Cipher import AES
 from urllib import parse
 from pyexcel_xls import save_data
@@ -12,7 +12,7 @@ from pyexcel_xls import save_data
 
 class wrapper:
     metadata_debug = True
-    cache_debug = True
+    cache_debug = False
     auto_filter = True
     export_dir = '.'
     meta_export_filename = 'meta.xls'
@@ -54,7 +54,7 @@ class wrapper:
         o_token_raw = re.findall(r'token\.([\S]+)\.v', o_path)
         if len(o_token_raw):
             # tokens = parse.parse_qs(base64_url_decode(token_raw[0]))  # 二进制形式
-            o_tokens = parse.parse_qs(self.__base64_url_decode(o_token_raw[0]).decode('utf-8', 'ignore'))  # 字符串形式
+            o_tokens = parse.parse_qs(self.__base64_url_decode(o_token_raw[0]).decode('utf-8', 'ignore'), False, False, 'utf-8', 'replace', None, ';')  # 字符串形式
         else:
             o_tokens = None
 
@@ -97,16 +97,15 @@ class wrapper:
             return None
         ex = self.__extract_from_url(url=metadata)
         uin = ex.tokens['uin'][0]
-        uin_array = uin.split(';')
-        term_id = uin_array[1].split('=')[1]
-        ps_key = uin_array[2].split('=')[1]
+        term_id = ex.tokens['term_id'][0]
+        ps_key = ex.tokens['pskey'][0]
         result = [os.path.split(filename)[1], uin, term_id, ps_key]
 
         if self.metadata_debug:
             print('[+]\tMetadata of {}:'.format(os.path.split(filename)[1]))
             print('[+]\tuin:{}\tterm_id:{}\tpskey:{}'.format(uin, term_id, ps_key))
             print('[+]\targs:{}'.format(ex.queries))
-            # print(result)
+            print(result)
         return result
 
     def __fetch_one_ts(self, filename: str, uin: str, term_id: str):
@@ -115,12 +114,25 @@ class wrapper:
         caches_table_name = 'caches'
         con = db.connect(filename)
         cu = con.cursor()
+
+        # 总行数
+        cu.execute('SELECT max(rowid) from {}'.format(caches_table_name))
+        max_row = cu.fetchone()[0]
+
+        # 查询数据
         ex1 = cu.execute('SELECT * FROM {}'.format(caches_table_name))
+
+        # 初始化进度条
+        parsing_progress = tqdm.tqdm(total=max_row)
+        parsing_progress.set_description("parsing")
+
+        # 初始化行
         row_index = -1
 
         aes_keys = []  # 有时候会有多个KEY(16bytes)，基本上是相同的
         ts_index = []
         # if debug:
+        print('\r\n')
         print('[+]\ttarget on {}'.format(os.path.split(filename)[1]))
         if self.cache_debug:
             print('[+]\tParsing ...', end='')
@@ -130,6 +142,7 @@ class wrapper:
                 break
             else:
                 row_index += 1
+
             key = data[0]  # column:key
             value = data[1]  # column:value
             key_extracted = self.__extract_from_url(key)  # 判断行数据类型（M3U8（可选）、AES_KEY和TS_BLOB）
@@ -148,15 +161,28 @@ class wrapper:
                 ts_index.append([row_index, start, end])
                 if self.cache_debug:
                     print('[TS{:03d}] {}-{}'.format(row_index, start, end))
+
+            # 更新解析进度
+            parsing_progress.set_postfix({"finished": f"{row_index} row", "total": f"{parsing_progress.total} row\r\n"})
+            parsing_progress.update()
+
         match_time = -1
         ordered_ts_index = []
+
+        order_progress = tqdm.tqdm(total=len(ts_index))
+
         # 重排序ts片段
         for i in range(len(ts_index)):
+            order_progress.update(1)
             for j in range(len(ts_index)):
                 if int(ts_index[j][1]) == match_time + 1:
                     ordered_ts_index.append(ts_index[j])
                     match_time = int(ts_index[j][2])
                     break
+
+            order_progress.set_description("order")
+            order_progress.update()
+
         # 合并片段
         ex2 = cu.execute('SELECT * FROM {}'.format(caches_table_name))
         data_all = ex2.fetchall()
@@ -164,13 +190,22 @@ class wrapper:
             print('Decrypting data...', end='')
         order_index = 0
         plain = b''
+
+        merge_progress = tqdm.tqdm(total=len(ordered_ts_index))
+        merge_progress.set_description("merge")
+
         for ts_one in ordered_ts_index:
+            merge_progress.update()
+
             if self.cache_debug:
                 print('[TS{:03d}]\t{}-{} writing'.format(ts_one[0], ts_one[1], ts_one[2]))
             raw = data_all[ts_one[0]][1]
             chip = self.__aes_decrypt(raw=raw, key=aes_keys[0])
             plain += chip
             order_index += 1
+
+
+
         if self.cache_debug:
             print('Combining {} clips...'.format(len(ordered_ts_index)), end='')
 
